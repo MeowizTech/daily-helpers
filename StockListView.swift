@@ -7,19 +7,20 @@ struct StockItem: Identifiable, Codable {
     var expiryDate: Date?
 }
 
-struct StockListView: some View {
+struct StockListView: View {
+    @Environment(\.dismiss) private var dismiss
+
     @State private var items: [StockItem] = [
         StockItem(name: "卵", quantity: 6, expiryDate: Date().addingTimeInterval(86400 * 3)),
         StockItem(name: "牛乳", quantity: 1, expiryDate: Date().addingTimeInterval(86400 * 5)),
         StockItem(name: "納豆", quantity: 3, expiryDate: Date().addingTimeInterval(86400 * 7))
     ]
     @State private var showingAddItem = false
-    @State private var newItemName = ""
-    
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Button(action: {}) {
+                Button(action: { dismiss() }) {
                     Image(systemName: "chevron.left")
                         .font(.title2)
                 }
@@ -28,7 +29,7 @@ struct StockListView: some View {
                 Text("ストック管理")
                     .font(.headline)
                 Spacer()
-                Button(action: { showingAddItem.toggle() }) {
+                Button(action: { showingAddItem = true }) {
                     Image(systemName: "plus")
                         .font(.title2)
                 }
@@ -36,7 +37,7 @@ struct StockListView: some View {
             }
             .padding()
             .background(Color.secondary.opacity(0.05))
-            
+
             List {
                 ForEach(items) { item in
                     HStack {
@@ -60,9 +61,76 @@ struct StockListView: some View {
             }
             .listStyle(InsetListStyle())
         }
+        .toolbar(.hidden)
+        .sheet(isPresented: $showingAddItem) {
+            AddStockItemView { newItem in
+                items.append(newItem)
+            }
+        }
     }
-    
-    func deleteItems(at offsets: IndexSet) {
+
+    private func deleteItems(at offsets: IndexSet) {
         items.remove(atOffsets: offsets)
     }
+}
+
+struct AddStockItemView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let onAdd: (StockItem) -> Void
+
+    @State private var name = ""
+    @State private var quantity = 1
+    @State private var hasExpiryDate = false
+    @State private var expiryDate = Date()
+
+    private var trimmedName: String {
+        name.trimmingCharacters(in: .whitespaces)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Text("ストックを追加")
+                .font(.headline)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("品目名")
+                    .font(.caption)
+                    .opacity(0.6)
+                TextField("例: 卵", text: $name)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+            }
+
+            Stepper("個数: \(quantity)", value: $quantity, in: 1...99)
+
+            Toggle("賞味期限を設定", isOn: $hasExpiryDate)
+
+            if hasExpiryDate {
+                DatePicker("期限", selection: $expiryDate, displayedComponents: .date)
+            }
+
+            Spacer()
+
+            HStack {
+                Spacer()
+                Button("キャンセル") { dismiss() }
+                Button("追加") {
+                    onAdd(StockItem(
+                        name: trimmedName,
+                        quantity: quantity,
+                        expiryDate: hasExpiryDate ? expiryDate : nil
+                    ))
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(trimmedName.isEmpty)
+            }
+        }
+        .padding()
+        .frame(minWidth: 320, minHeight: 300)
+    }
+}
+
+#Preview {
+    StockListView()
 }
