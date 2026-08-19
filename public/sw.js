@@ -1,11 +1,12 @@
 // 依存ゼロの軽量 Service Worker。
 // ビルド成果物のハッシュ名に依存しないよう、precache ではなく実行時キャッシュで組む。
 const CACHE = "daily-helpers-v1";
-const SHELL = "/";
+const BASE = new URL("./", self.location.href).pathname;
+const SHELL = BASE;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll([SHELL, "/manifest.webmanifest", "/icon.svg"])),
+    caches.open(CACHE).then((cache) => cache.addAll([SHELL, `${BASE}manifest.webmanifest`, `${BASE}icon.svg`])),
   );
   self.skipWaiting();
 });

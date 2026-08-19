@@ -14,7 +14,7 @@ createRoot(container).render(
 
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => {
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {
       // オフライン対応は付加機能なので、失敗してもアプリは動かす
     });
   });
