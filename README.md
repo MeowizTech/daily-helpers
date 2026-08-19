@@ -1,87 +1,147 @@
 # Daily Helpers
 
-日常のちょっとした「迷い」と「面倒」を片付ける、SwiftUI 製のミニツール集アプリ。
+日常のちょっとした「迷い」と「面倒」を片付ける、モバイル前提の Web アプリ。
 
 買い物のコスパ比較・食材ストックの管理・献立などの決定を、1 つのアプリの中から選んで使える。
+PWA なのでホーム画面に追加でき、一度開けばオフラインでも動く。
 
 ## 技術スタック
 
 | 項目 | 内容 |
 | --- | --- |
-| 言語 | Swift |
-| UI フレームワーク | SwiftUI (`@main` + `WindowGroup` + `NavigationStack`) |
-| 対応プラットフォーム | macOS 13.0+ / iOS 16.0+（両ターゲットで型チェック確認済み） |
-| 外部依存 | なし（標準フレームワークのみ） |
-| 永続化 | なし（現状すべて `@State` のインメモリ保持） |
+| ビルド | Vite 7 |
+| UI | React 19 + TypeScript（strict） |
+| スタイル | Tailwind CSS v4（`@theme` でトークン定義） |
+| ルーティング | 自前のハッシュルーター（`src/lib/router.ts`、依存ゼロ） |
+| 永続化 | localStorage |
+| Lint / Format | Biome |
+| テスト | Vitest + Testing Library（happy-dom） |
+| オフライン | 自前の Service Worker（`public/sw.js`、依存ゼロ） |
 
-最低要件は `NavigationStack` と `toolbar(_:for:)` に由来する。それより前の OS を対象にする場合はこの 2 つを差し替える必要がある。
+### なぜ Next.js ではないか
+
+3 機能すべてがクライアント完結で、サーバ側の処理・データ取得・認証が一切ない。
+Next.js を使っても SSR / Server Actions は出番がなく、フレームワークの JS だけ増える。
+モバイル回線での初回表示を優先して Vite + SPA を選んだ。
+
+同じ理由で、ルーターと Service Worker はライブラリを入れず数十行の自前実装にしている
+（`react-router` / `vite-plugin-pwa` は 4 画面のこの規模には過剰）。
+
+### バンドルサイズ
+
+初回ロードで取得する分の合計は **約 70KB（gzip）**。うち約 66KB が React 本体。
+
+`react` / `react-dom` を `preact/compat` にエイリアスすると **約 19KB（gzip）** まで落ちる（実測）。
+ただしその場合 `@testing-library/react` が本物の react-dom を掴んでテストが 26 件失敗するため、
+`@testing-library/preact` への差し替えが併せて必要になる。現状は React のまま。
 
 ## 機能
 
-### 買い物比較（`UnitPriceView.swift`）
+### 買い物比較（`src/features/unit-price/`）
 
-商品 A / B の「価格」と「量（g・ml）」を入力すると、**100g（100ml）あたりの単価**を計算してどちらがお得か判定する。
+商品 A / B の「価格」と「量」から **100 単位あたりの価格**を出し、どちらが割安かを判定する。
 
-- 単価は `価格 ÷ 量 × 100` で算出
-- 安い方をオレンジでハイライトし、「商品 A がお得！」と結論を表示
-- 4 つの値すべてが 0 より大きいときのみ結果を表示（未入力時はプレースホルダ）
+- 結論（「商品A が 20% 割安」）を画面最上部に置く。買い物中に見たいのは単価そのものより、どちらを取るか
+- 全角数字（`４５０`）と桁区切り（`1,280`）を受け付ける。スマホの日本語入力を想定
+- 0・負数・非数値は「未入力」として扱い、4 つ揃うまで結果を出さない
+- `inputMode="decimal"` で数値キーパッドを出す
 
-### ストック管理（`StockListView.swift`）
+### ストック管理（`src/features/stock/`）
 
-食材・日用品の在庫を一覧管理する。
+食材・日用品の在庫を、期限が近い順に並べて管理する。
 
-- 品目名 / 個数 / 賞味期限を保持する `StockItem`（`Identifiable`, `Codable`）
-- ヘッダーの ＋ ボタンから追加シート（`AddStockItemView`）を開き、品目名・個数・賞味期限（任意）を指定して登録
-- 期限切れの品目は日付を赤字で表示
-- スワイプ削除（`onDelete`）に対応
-- 起動時は卵・牛乳・納豆のサンプルデータ入り
+- 期限は `Date` ではなく `YYYY-MM-DD` 文字列で保持し、タイムゾーン差の影響を受けないようにしている
+- 残り日数を日本語で表示（`今日が期限` / `明日が期限` / `4日前に期限切れ` / `あと6日`）
+- 期限切れは赤、3 日以内は橙。色だけに頼らないよう左端のバーと文言も併せて変える
+- 個数の増減、削除、追加に対応。品目名が長い場合は省略表示＋`title` で全文を保持
+- localStorage の内容は読み込み時に検証し、壊れた要素だけ捨てて残りは活かす
 
-### 決定ルーレット（`DecisionView.swift`）
+### 決定ルーレット（`src/features/decision/`）
 
 選択肢の中から 1 つをランダムに選ぶ。「今日何食べる？」を終わらせるやつ。
 
-- 初期選択肢は 中華 / 和食 / イタリアン / コンビニ
-- 選択肢の追加（重複・空白のみは弾く）・削除に対応
-- 「スタート！」で 1.5 秒の "考え中..." 演出をはさみ、`randomElement()` で結果を spring アニメーション付きで表示
+- 結果を画面の主役として最大サイズで表示
+- 追加時に前後の空白と連続空白を正規化し、重複・空・上限（20 個）は理由付きで弾く
+- 1.2 秒の「考え中…」演出を挟む。`prefers-reduced-motion: reduce` の環境では即座に結果を出す
 
-## ファイル構成
+### メニュー（`src/features/menu/`）
+
+3 機能のうち時間で状況が変わるのはストックだけなので、**期限が迫っている品目を主役として最上部に出す**。
+急ぐものがなければ 1 行に落とし、道具の一覧は補助として下に並べる。
+
+## 設計方針
+
+### 色の役割
 
 ```
-.
-├── DailyHelpersApp.swift   # アプリのエントリポイント（@main）。MainMenuView を表示
-├── MainMenuView.swift      # 3 機能へのハブ画面 + メニューボタン（MenuButtonView）
-├── UnitPriceView.swift     # 買い物比較（ComparisonCard / ResultView / ResultValue を内包）
-├── StockListView.swift     # ストック管理（StockItem モデル / AddStockItemView を内包）
-└── DecisionView.swift      # 決定ルーレット
+無彩色 (bg / surface / line / fg / ink)  = 構造と操作（CTA も無彩色）
+彩度のある色 (ok / warn / danger)        = 状態のみ
 ```
 
-`NavigationStack` + `NavigationLink` によるスタック遷移で、メインメニューから各機能へ移動する。各画面は独自のヘッダー（戻る `chevron.left` + タイトル）を持つため、標準のナビゲーションバーは `.toolbar(.hidden)` で隠している。戻る操作は `@Environment(\.dismiss)` 経由。
+「色が付いていたら、それは状態を示している」と 1 文で説明できる状態を保つ。
+ネイティブ版は機能ごとに青・緑・紫を割り当てていたが、その色は意味を持っていなかったため廃止した。
 
-## セットアップ
+トークンは `src/index.css` の `@theme` に定義し、ダークモードは `prefers-color-scheme` で同じ変数名を上書きする。
+Web フォントは読み込まず system font stack を使う（転送量とレイアウトシフトの回避）。
 
-このリポジトリには **Xcode プロジェクト（`.xcodeproj`）も `Package.swift` も含まれていない**ため、ビルドするには自分でプロジェクトを用意する必要がある。
+### ディレクトリ構成
 
-1. Xcode で新規プロジェクトを作成（App / Interface: SwiftUI / Language: Swift）
-2. 生成された `ContentView.swift` と `〜App.swift` を削除
-3. このリポジトリの `.swift` ファイル 5 つをすべてターゲットに追加
-4. Deployment Target を macOS 13.0（または iOS 16.0）以上に設定
-5. Run（⌘R）
+```
+src/
+├── main.tsx                    # エントリポイント + Service Worker 登録
+├── App.tsx                     # ルートによる画面切り替え
+├── index.css                   # デザイントークン（@theme）
+├── lib/
+│   ├── router.ts               # ハッシュルーター
+│   └── use-local-storage.ts    # localStorage 同期 state
+├── components/                 # 画面をまたぐ UI（Screen / Field / EmptyState）
+└── features/
+    ├── menu/
+    ├── unit-price/             # unit-price.ts（純関数）+ *-screen.tsx（UI）
+    ├── stock/
+    └── decision/
+```
 
-### Xcode なしで型チェックだけしたい場合
+各 feature は「ロジックの純関数モジュール」と「画面コンポーネント」に分ける。
+計算・判定・バリデーションは純関数側に置き、そこを単体テストの対象にする。
+
+## 開発
 
 ```sh
-SDK=$(xcrun --show-sdk-path --sdk macosx)
-swiftc -typecheck -sdk "$SDK" -target arm64-apple-macos13.0 *.swift
+npm install
+npm run dev        # 開発サーバ
+npm test           # 単体 + レンダリングテスト（63 件）
+npm run typecheck  # tsc --noEmit
+npm run check      # Biome（lint + format 自動修正）
+npm run build      # 型チェック → 本番ビルド
+npm run preview    # ビルド結果の確認
 ```
 
-`#Preview` マクロの展開には Xcode のマクロプラグインサーバが必要なため、環境によっては `#Preview` 部分のみ展開に失敗することがある。その場合もアプリ本体のコードには影響しない。
+Service Worker は本番ビルドでのみ登録されるため、オフライン動作の確認は `npm run build && npm run preview` で行う。
 
-## 今後の課題
+## 未確認・未対応
 
-- **データが揮発する**: ストック品目・ルーレットの選択肢はアプリ終了で消える。`StockItem` は `Codable` 準拠済みなので、`UserDefaults` や JSON ファイルへの保存を足せる。
-- **ストック品目を編集できない**: 追加と削除のみ対応。個数の増減や期限の変更には未対応。
-- **単価比較が 2 商品固定**: 3 つ以上の比較や、単位（g / ml / 個）の切り替えには未対応。
-- **テストがない**: 単価計算（`ResultView` の `p / w * 100`）はロジックを型から切り出せば単体テストしやすい。
+- **ブラウザでの目視確認をしていない**。型チェック・Biome・テスト 63 件・本番ビルドは通っているが、
+  実機やブラウザでの表示・PWA インストールは未検証
+- **PWA アイコンが SVG のみ**。Chrome / Safari では動くが、Android の一部で PNG が要求される場合がある
+- ストックの品目名・期限の編集は未対応（追加・削除・個数の増減のみ）
+- 単価比較は 2 商品固定。単位（g / ml / 個）の切り替えにも未対応
+
+## ネイティブ版（`swift/`）
+
+もとは SwiftUI の macOS / iOS アプリだった。そのソースは `swift/` に残している。
+
+Web 版への移植で意図的に変えた点:
+
+| | SwiftUI 版 | Web 版 |
+| --- | --- | --- |
+| メニュー | 3 機能を均等なカードで並べる | 期限が近いストックを主役に、道具は補助 |
+| 機能色 | 青 / 緑 / 紫（意味なし） | 廃止。色は状態のみに使う |
+| 期限の型 | `Date?` | `YYYY-MM-DD` 文字列（タイムゾーン非依存） |
+| 永続化 | なし | localStorage |
+| 個数の編集 | 不可 | 増減ボタン |
+
+`swift/` 側のビルド方法は git 履歴の `1e02c40` 時点の README を参照。
 
 ## ライセンス
 
