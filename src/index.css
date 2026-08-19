@@ -1,4 +1,11 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
+
+/*
+ * クラス名の走査を src/ だけに絞る。
+ * 自動検出のままだと scripts/ のコメントや識別子（`filter: none` / `CRC_TABLE` など）を
+ * クラス名として拾い、使われない CSS が混ざる。
+ */
+@source "./**/*.{ts,tsx}";
 
 /*
  * 色の役割ルール
