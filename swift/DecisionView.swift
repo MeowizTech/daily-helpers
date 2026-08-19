@@ -1,15 +1,17 @@
 import SwiftUI
 
-struct DecisionView: some View {
+struct DecisionView: View {
+    @Environment(\.dismiss) private var dismiss
+
     @State private var options: [String] = ["中華", "和食", "イタリアン", "コンビニ"]
     @State private var newOption: String = ""
     @State private var result: String? = nil
     @State private var isSpinning = false
-    
+
     var body: some View {
         VStack(spacing: 20) {
             HStack {
-                Button(action: {}) {
+                Button(action: { dismiss() }) {
                     Image(systemName: "chevron.left")
                         .font(.title2)
                 }
@@ -21,7 +23,7 @@ struct DecisionView: some View {
                 Spacer().frame(width: 32)
             }
             .padding()
-            
+
             VStack {
                 if let res = result {
                     Text("結果は...")
@@ -39,7 +41,7 @@ struct DecisionView: some View {
                 }
             }
             .frame(height: 150)
-            
+
             Button(action: spin) {
                 Text(isSpinning ? "考え中..." : "スタート！")
                     .font(.title2)
@@ -50,28 +52,26 @@ struct DecisionView: some View {
                     .background(isSpinning ? Color.gray : Color.purple)
                     .cornerRadius(15)
             }
+            .buttonStyle(PlainButtonStyle())
             .disabled(isSpinning || options.isEmpty)
             .padding(.horizontal)
-            
+
             Divider().padding()
-            
+
             VStack(alignment: .leading) {
                 Text("選択肢")
                     .font(.caption)
                     .bold()
-                
+
                 HStack {
                     TextField("新しい選択肢", text: $newOption)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
-                    Button("追加") {
-                        if !newOption.isEmpty {
-                            options.append(newOption)
-                            newOption = ""
-                        }
-                    }
-                    .buttonStyle(BorderedButtonStyle())
+                        .onSubmit(addOption)
+                    Button("追加", action: addOption)
+                        .buttonStyle(BorderedButtonStyle())
+                        .disabled(newOption.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
-                
+
                 ScrollView {
                     VStack(spacing: 8) {
                         ForEach(options, id: \.self) { option in
@@ -90,19 +90,27 @@ struct DecisionView: some View {
                 }
             }
             .padding(.horizontal)
-            
+
             Spacer()
         }
         .background(Color.secondary.opacity(0.05).ignoresSafeArea())
+        .toolbar(.hidden)
     }
-    
-    func spin() {
+
+    private func addOption() {
+        let trimmed = newOption.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, !options.contains(trimmed) else { return }
+        options.append(trimmed)
+        newOption = ""
+    }
+
+    private func spin() {
         withAnimation {
             isSpinning = true
             result = nil
         }
-        
-        // Simulate spinning delay
+
+        // ルーレットが回っている演出のための待ち時間
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             withAnimation(.spring()) {
                 result = options.randomElement()
@@ -110,4 +118,8 @@ struct DecisionView: some View {
             }
         }
     }
+}
+
+#Preview {
+    DecisionView()
 }
