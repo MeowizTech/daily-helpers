@@ -1,0 +1,26 @@
+{
+  "name": "Daily Helpers",
+  "short_name": "Helpers",
+  "description": "買い物の単価比較・ストック管理・決定ルーレット。",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "lang": "ja",
+  "background_color": "#faf9f7",
+  "theme_color": "#faf9f7",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
