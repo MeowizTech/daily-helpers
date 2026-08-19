@@ -17,6 +17,7 @@ PWA なのでホーム画面に追加でき、一度開けばオフラインで�
 | Lint / Format | Biome |
 | テスト | Vitest + Testing Library（happy-dom） |
 | オフライン | 自前の Service Worker（`public/sw.js`、依存ゼロ） |
+| アイコン | `scripts/generate-icons.mjs` で PNG を生成（依存ゼロ） |
 
 ### なぜ Next.js ではないか
 
@@ -84,6 +85,31 @@ Next.js を使っても SSR / Server Actions は出番がなく、フレーム�
 トークンは `src/index.css` の `@theme` に定義し、ダークモードは `prefers-color-scheme` で同じ変数名を上書きする。
 Web フォントは読み込まず system font stack を使う（転送量とレイアウトシフトの回避）。
 
+Tailwind のクラス走査は `@source` で `src/` に限定している。自動検出のままだと
+`scripts/` のコメントや識別子（`filter: none` / `CRC_TABLE` など）をクラス名として拾い、
+使われない CSS が 1.2KB ほど混ざる。
+
+### アイコン
+
+`scripts/generate-icons.mjs` が図形を直接ラスタライズして PNG を書き出す（`node:zlib` のみ、依存ゼロ）。
+SVG ラスタライザを環境に前提できないため、変換ツールを挟まず生成器そのものをリポジトリに置いている。
+
+図案は「3 本の横線（持ち物のリスト）＋ 最下段の琥珀色の点（期限の警告）」。
+このアプリで最初に見せたい情報がストックの期限であることを、そのまま形にしている。
+
+| ファイル | 用途 | 形式 |
+| --- | --- | --- |
+| `icon-192.png` / `icon-512.png` | manifest の `purpose: any` | 角丸・外側は透明（RGBA） |
+| `icon-maskable-512.png` | manifest の `purpose: maskable` | 全面塗り・前景は中央 90%（RGB） |
+| `apple-touch-icon.png` | iOS のホーム画面 | 全面塗り（RGB、透明チャンネルなし） |
+| `icon.svg` | favicon | ベクター |
+
+- 4x4 のスーパーサンプリングで縁を滑らかにし、乗算済みアルファで平均してから戻すことで透明部分のフリンジを避ける
+- 全面が不透明なものは RGB で書き出す（Apple は touch icon の透明を推奨していない）
+- maskable の前景は中心から最大 0.31（安全域の半径は 0.4）に収めている
+
+図案を変えたら `npm run icons` で再生成する。
+
 ### ディレクトリ構成
 
 ```
@@ -115,6 +141,7 @@ npm run typecheck  # tsc --noEmit
 npm run check      # Biome（lint + format 自動修正）
 npm run build      # 型チェック → 本番ビルド
 npm run preview    # ビルド結果の確認
+npm run icons      # PWA アイコン PNG の再生成
 ```
 
 Service Worker は本番ビルドでのみ登録されるため、オフライン動作の確認は `npm run build && npm run preview` で行う。
@@ -123,7 +150,6 @@ Service Worker は本番ビルドでのみ登録されるため、オフライ�
 
 - **ブラウザでの目視確認をしていない**。型チェック・Biome・テスト 63 件・本番ビルドは通っているが、
   実機やブラウザでの表示・PWA インストールは未検証
-- **PWA アイコンが SVG のみ**。Chrome / Safari では動くが、Android の一部で PNG が要求される場合がある
 - ストックの品目名・期限の編集は未対応（追加・削除・個数の増減のみ）
 - 単価比較は 2 商品固定。単位（g / ml / 個）の切り替えにも未対応
 
