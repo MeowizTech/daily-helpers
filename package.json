@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "check": "biome check --write .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",
