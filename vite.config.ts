@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  base: "/daily-helpers/",
   plugins: [react(), tailwindcss()],
   build: {
     // モバイル回線を想定した目安。超えたらバンドルが太った合図として扱う
